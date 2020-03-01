@@ -33,6 +33,7 @@
 #include <llvm/Transforms/Instrumentation.h>
 #include <llvm/Transforms/Vectorize.h>
 #include <llvm/Transforms/Scalar/GVN.h>
+#include <llvm/Transforms/Scalar/InstSimplifyPass.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
@@ -175,7 +176,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     if (dump_native)
         PM->add(createMultiVersioningPass());
     PM->add(createSROAPass());                 // Break up aggregate allocas
-    PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
+    PM->add(createInstSimplifyLegacyPass()); // Cleanup for scalarrepl.
     PM->add(createJumpThreadingPass());        // Thread jumps.
     //PM->add(createInstructionCombiningPass()); // Combine silly seq's
 
@@ -191,7 +192,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // remove those before optimizing loops.
     PM->add(createAllocOptPass());
     PM->add(createLoopRotatePass());           // Rotate loops.
-    PM->add(createIndVarSimplifyPass());       // Canonicalize indvars
+    // moving IndVarSimplify here prevented removing the loop in perf_sumcartesian(10:-1:1)
     PM->add(createLoopIdiomPass()); //// ****
 #ifdef USE_POLLY
     // LCSSA (which has already run at this point due to the dependencies of the
@@ -207,7 +208,8 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createLICMPass());                 // Hoist loop invariants
     PM->add(createLoopUnswitchPass());         // Unswitch loops.
     // Subsequent passes not stripping metadata from terminator
-    PM->add(createInstructionCombiningPass());
+    PM->add(createInstSimplifyLegacyPass());
+    PM->add(createIndVarSimplifyPass());       // Canonicalize indvars
     PM->add(createLoopDeletionPass());         // Delete dead loops
     // this does only full unrolling, not partial:
     PM->add(createSimpleLoopUnrollPass());     // Unroll small loops
@@ -230,7 +232,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 
     // Run instcombine after redundancy elimination to exploit opportunities
     // opened up by them.
-    PM->add(createInstructionCombiningPass());
+    PM->add(createInstSimplifyLegacyPass());
     PM->add(createJumpThreadingPass());         // Thread jumps
     PM->add(createDeadStoreEliminationPass());  // Delete dead stores
 
@@ -241,7 +243,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // this helps significantly with cleaning up iteration
     PM->add(createCFGSimplificationPass());     // Merge & remove BBs
     //PM->add(createLoopIdiomPass());
-    //PM->add(createLoopDeletionPass());          // Delete dead loops
+    PM->add(createLoopDeletionPass());          // Delete dead loops
     //PM->add(createJumpThreadingPass());         // Thread jumps
     PM->add(createInstructionCombiningPass());  // Clean up after SLP loop vectorizer
     PM->add(createLoopVectorizePass());         // Vectorize loops
